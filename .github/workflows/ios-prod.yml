@@ -1,0 +1,118 @@
+name: Deploy iOS App to Test Flight
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  repository_dispatch:
+    types: ['deploy-ios-to-test-flight']
+
+jobs:
+  deploy-ios-to-test-flight:
+    runs-on: macos-11
+
+    env:
+      SENTRY_PROPERTIES: ./ios/sentry.properties
+      SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+      CURRENT_BRANCH: ${{ github.event.client_payload.branch }}
+      GIT_LAB_COMMIT_SHA: ${{ github.event.client_payload.commit_sha }}
+      GIT_LAB_PIPELINE_ID: ${{ github.event.client_payload.pipeline_id }}
+      USER_NAME: ${{ secrets.GITLAB_USER_NAME }}
+      USER_EMAIL: ${{ secrets.GITLAB_USER_EMAIL }}
+      SSH_KNOWN_HOST: ${{ secrets.SSH_KNOWN_HOST }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      REPO_URL: ${{ secrets.REPO_URL }}
+      DATABASE_DEFAULT_ENCRYPTION_KEY: ${{ secrets.DATABASE_DEFAULT_ENCRYPTION_KEY }}
+      OAUTH_CLIENT_ID_ANDROID: ${{ secrets.OAUTH_CLIENT_ID_ANDROID }}
+      APP_METRICA_API_KEY: ${{ secrets.APP_METRICA_API_KEY }}
+      FASTLANE_USER: ${{ secrets.FASTLANE_USER }}
+      FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+      FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD }}
+      BUMP_TYPE: ${{ github.event.client_payload.bump_type }}
+      APP_RELEASE_VERSION: ${{ github.event.client_payload.app_release_version }}
+      GIT_LAB_ACCESS_TOKEN: ${{ secrets.GIT_LAB_ACCESS_TOKEN }}
+      OAUTH_CLIENT_ID_IOS: ${{ secrets.OAUTH_CLIENT_ID_IOS }}
+      AMPLITUDE_API_KEY: ${{ secrets.AMPLITUDE_API_KEY }}
+      APPSFLYER_API_KEY: ${{ secrets.APPSFLYER_API_KEY }}
+      REVENUECAT_API_KEY: ${{ secrets.REVENUECAT_API_KEY }}
+
+    steps:
+    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+    - uses: actions/checkout@v2
+
+    - name: Check all required variables
+      run: sh ./scripts/common-check.sh && sh ./scripts/ios-prod-check.sh
+
+    - name: Switch to Java 8 (hack for uploading build to Test Flight)
+      run: |
+          java -version
+          cd /Library/Java/JavaVirtualMachines
+          rm -rf openjdk-11.0.1.jdk
+          java -version
+
+    - name: Configure git users
+      run: |
+          git config --global user.name "$USER_NAME"
+          git config --global user.email "$USER_EMAIL"
+
+    - name: Setup SSH keys and known_hosts
+      run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan $SSH_KNOWN_HOST >> ~/.ssh/known_hosts
+          ssh-agent -a $SSH_AUTH_SOCK > /dev/null
+          ssh-add ~/.ssh/id_rsa
+
+    - name: Get repository
+      run: |
+        rm -rf ./.git ./.github ./.gitignore ./*
+        ls -la ./
+        git clone "$REPO_URL" --branch="$CURRENT_BRANCH" --single ./
+        git log -1
+
+    - name: Notify gitlab
+      run: ./infrastructure/gitlab/status.sh "state=running&description=$GITHUB_RUN_ID"
+
+    # Get cocoapods version based on Podfile.lock
+    - name: setup-cocoapods
+      uses: maxim-lobanov/setup-cocoapods@v1
+      with:
+        podfile-path: ./ios/Podfile.lock
+
+    - name: Install Node.js 12.x
+      uses: actions/setup-node@v1
+      with:
+        node-version: 12.x
+
+    - name: Install Ruby 2.x
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: '2.x'
+
+    - run: yarn install --frozen-lockfile
+
+    - name: Install pods
+      run: pod install
+      working-directory: ios
+
+    - name: Install gem dependencies
+      run: |
+        bundle config path vendor/bundle
+        bundle install --jobs 4 --retry 3
+
+    - name: Run fastlane line "fastlane ios deploy" with PROD ENV variables
+      run: bundle exec fastlane ios deploy
+
+    - name: The job has cancelled
+      if: ${{ cancelled() }}
+      run: ./infrastructure/gitlab/status.sh "state=canceled"
+
+    - name: The job has failed
+      if: ${{ failure() }}
+      run: ./infrastructure/gitlab/status.sh "state=failed"
+
+    - name: The job has success
+      run: ./infrastructure/gitlab/status.sh "state=success"
