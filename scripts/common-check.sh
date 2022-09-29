@@ -22,11 +22,11 @@ then
     exit 1
 fi
 
-if [[ -z "$SSH_KNOWN_HOST" ]]
-then
-    echo "Please sure that SSH_KNOWN_HOST exists"
-    exit 1
-fi
+# if [[ -z "$SSH_KNOWN_HOST" ]]
+# then
+#     echo "Please sure that SSH_KNOWN_HOST exists"
+#     exit 1
+# fi
 
 if [[ -z "$SSH_PRIVATE_KEY" ]]
 then
