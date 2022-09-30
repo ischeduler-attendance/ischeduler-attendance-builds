@@ -46,20 +46,9 @@ then
     exit 1
 fi
 
-if [[ -z "$DATABASE_DEFAULT_ENCRYPTION_KEY" ]]
-then
-    echo "Please sure that DATABASE_DEFAULT_ENCRYPTION_KEY exists"
-    exit 1
-fi
 
 if [[ -z "$OAUTH_CLIENT_ID_ANDROID" ]]
 then
     echo "Please sure that OAUTH_CLIENT_ID_ANDROID exists"
-    exit 1
-fi
-
-if [[ -z "$APP_METRICA_API_KEY" ]]
-then
-    echo "Please sure that APP_METRICA_API_KEY exists"
     exit 1
 fi
