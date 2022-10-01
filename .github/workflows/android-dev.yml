@@ -20,7 +20,6 @@ jobs:
         GIT_LAB_PIPELINE_ID: ${{ github.event.client_payload.pipeline_id }}
         USER_NAME: ${{ secrets.GITLAB_USER_NAME }}
         USER_EMAIL: ${{ secrets.GITLAB_USER_EMAIL }}
-        SSH_KNOWN_HOST: ${{ secrets.SSH_KNOWN_HOST }}
         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         REPO_URL: ${{ secrets.REPO_URL }}
         ENCRYPT_PASSWORD: ${{ secrets.ENCRYPT_PASSWORD }}
@@ -28,6 +27,7 @@ jobs:
         APP_METRICA_API_KEY: ${{ secrets.APP_METRICA_API_KEY_STAGING }}
         FIREBASEAPPDISTRO_APP: ${{ secrets.FIREBASE_APP_ID_ANDROID }}
         FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
 
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
