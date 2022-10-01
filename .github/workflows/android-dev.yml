@@ -77,8 +77,8 @@ jobs:
           git clone "$REPO_URL" --branch="$CURRENT_BRANCH" --single --depth=1 ./
           git log -1
 
-      - name: Notify gitlab
-        run: chmod u+x ./infrastructure/gitlab/status.sh "state=running&description=$GITHUB_RUN_ID"
+      # - name: Notify gitlab
+      #   run: chmod u+x ./infrastructure/gitlab/status.sh "state=running&description=$GITHUB_RUN_ID"
 
       - name: Decrypt keystore and Google Credentials
         run: |
@@ -134,13 +134,13 @@ jobs:
       - name: Run fastlane line "fastlane android distribute" with PROD ENV variables
         run: bundle exec fastlane android distribute
 
-      - name: The job has cancelled
-        if: ${{ cancelled() }}
-        run: ./infrastructure/gitlab/status.sh "state=canceled"
+      # - name: The job has cancelled
+      #   if: ${{ cancelled() }}
+      #   run: ./infrastructure/gitlab/status.sh "state=canceled"
 
-      - name: The job has failed
-        if: ${{ failure() }}
-        run: ./infrastructure/gitlab/status.sh "state=failed"
+      # - name: The job has failed
+      #   if: ${{ failure() }}
+      #   run: ./infrastructure/gitlab/status.sh "state=failed"
 
-      - name: The job has success
-        run: ./infrastructure/gitlab/status.sh "state=success"
+      # - name: The job has success
+      #   run: ./infrastructure/gitlab/status.sh "state=success"
