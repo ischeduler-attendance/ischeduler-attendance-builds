@@ -33,6 +33,13 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       # - uses: actions/checkout@v3
 
+      - name: Get repository
+        run: |
+          rm -rf ./.git ./.github ./.gitignore ./*
+          ls -la ./
+          git clone "$REPO_URL" --branch="main" --single --depth=1 ./
+          git log -1
+
       - name: Set up our JDK environment # setup JDK environment: mandatory as we need to build  android project
         uses: actions/setup-java@v1.4.3
         with:
@@ -80,12 +87,7 @@ jobs:
           # set tag version
           echo ::set-output name=tag::${GITHUB_REF_SLUG}
 
-      - name: Get repository
-        run: |
-          rm -rf ./.git ./.github ./.gitignore ./*
-          ls -la ./
-          git clone "$REPO_URL" --branch="main" --single --depth=1 ./
-          git log -1
+
       
       - name: Generate App APK
         env:
