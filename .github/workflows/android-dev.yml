@@ -93,6 +93,7 @@ jobs:
           APP_VERSION: ${{ steps.vars.outputs.tag }}
         id: generate_apk
         run: |
+          echo ls
           echo ${{ secrets.ANDROID_SIGNING_KEY }} | base64 --decode > android/app/my-upload-key.keystore
           cd android && ./gradlew assembleRelease --no-daemon
 
