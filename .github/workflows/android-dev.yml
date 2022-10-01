@@ -12,16 +12,38 @@ jobs:
   android-build:
     name: Android Build
     runs-on: ubuntu-latest # using ubuntu latest version / or you can use a specific version
+    env:
+        SENTRY_PROPERTIES: ./android/sentry.properties
+        SENTRY_DIST: 0
+        SENTRY_RELEASE: alpha
+        SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+        CURRENT_BRANCH: ${{ github.event.client_payload.branch }}
+        GIT_LAB_COMMIT_SHA: ${{ github.event.client_payload.commit_sha }}
+        GIT_LAB_PIPELINE_ID: ${{ github.event.client_payload.pipeline_id }}
+        USER_NAME: ${{ secrets.GITLAB_USER_NAME }}
+        USER_EMAIL: ${{ secrets.GITLAB_USER_EMAIL }}
+        SSH_KNOWN_HOST: ${{ secrets.SSH_KNOWN_HOST }}
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        REPO_URL: ${{ secrets.REPO_URL }}
+        ENCRYPT_PASSWORD: ${{ secrets.ENCRYPT_PASSWORD }}
+        OAUTH_CLIENT_ID_ANDROID: ${{ secrets.OAUTH_CLIENT_ID_ANDROID_STAGING }}
+        APP_METRICA_API_KEY: ${{ secrets.APP_METRICA_API_KEY_STAGING }}
+        FIREBASEAPPDISTRO_APP: ${{ secrets.FIREBASE_APP_ID_ANDROID }}
+        FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
     steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
       - name: Get repository
         run: |
           rm -rf ./.git ./.github ./.gitignore ./*
           ls -la ./
-          git clone "$REPO_URL" --branch="$CURRENT_BRANCH" --single --depth=1 ./
+          git clone "$REPO_URL" --branch="main" --single --depth=1 ./
           git log -1
 
-      - name: Check out Git repository # clone the repo to local ci workspace
-        uses: actions/checkout@v3
+      # - name: Check out Git repository # clone the repo to local ci workspace
+      #   uses: actions/checkout@v3
 
       - name: Set up our JDK environment # setup JDK environment: mandatory as we need to build  android project
         uses: actions/setup-java@v1.4.3
