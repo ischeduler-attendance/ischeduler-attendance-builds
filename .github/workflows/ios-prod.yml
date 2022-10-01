@@ -4,7 +4,7 @@ name: Deploy iOS App to Test Flight
 # events but only for the master branch
 on:
   repository_dispatch:
-    types: ['deploy-ios-to-test-flight']
+    types: ['distribute-ipa']
 
 jobs:
   deploy-ios-to-test-flight:
@@ -21,9 +21,6 @@ jobs:
       SSH_KNOWN_HOST: ${{ secrets.SSH_KNOWN_HOST }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       REPO_URL: ${{ secrets.REPO_URL }}
-      DATABASE_DEFAULT_ENCRYPTION_KEY: ${{ secrets.DATABASE_DEFAULT_ENCRYPTION_KEY }}
-      OAUTH_CLIENT_ID_ANDROID: ${{ secrets.OAUTH_CLIENT_ID_ANDROID }}
-      APP_METRICA_API_KEY: ${{ secrets.APP_METRICA_API_KEY }}
       FASTLANE_USER: ${{ secrets.FASTLANE_USER }}
       FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
       FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
