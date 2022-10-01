@@ -77,8 +77,11 @@ jobs:
           git clone "$REPO_URL" --branch="$CURRENT_BRANCH" --single --depth=1 ./
           git log -1
 
-      # - name: Notify gitlab
-      #   run: chmod u+x ./infrastructure/gitlab/status.sh "state=running&description=$GITHUB_RUN_ID"
+      - name: Notify gitlab
+        run: sudo chmod +rx "./infrastructure/gitlab/status.sh state=running&description=$GITHUB_RUN_ID"
+
+      - name: Notify gitlab 2
+        run: sudo chmod +rx "./infrastructure/gitlab/status.sh" "state=running&description=$GITHUB_RUN_ID"
 
       - name: Decrypt keystore and Google Credentials
         run: |
