@@ -1,75 +1,18 @@
-name: Distribute APK App to Firebase App Distribution
+name: Development Distribution
 
-# Controls when the action will run. Triggers the workflow on push or pull request
-# events but only for the master branch
 on:
   repository_dispatch:
     types: ["distribute-apk"]
 
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  distribute-apk:
-    runs-on: ubuntu-20.04
-    env:
-      SENTRY_PROPERTIES: ./android/sentry.properties
-      SENTRY_DIST: 0
-      SENTRY_RELEASE: alpha
-      SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-      CURRENT_BRANCH: ${{ github.event.client_payload.branch }}
-      GIT_LAB_COMMIT_SHA: ${{ github.event.client_payload.commit_sha }}
-      GIT_LAB_PIPELINE_ID: ${{ github.event.client_payload.pipeline_id }}
-      USER_NAME: ${{ secrets.GITLAB_USER_NAME }}
-      USER_EMAIL: ${{ secrets.GITLAB_USER_EMAIL }}
-      SSH_KNOWN_HOST: ${{ secrets.SSH_KNOWN_HOST }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      REPO_URL: ${{ secrets.REPO_URL }}
-      ENCRYPT_PASSWORD: ${{ secrets.ENCRYPT_PASSWORD }}
-      DATABASE_DEFAULT_ENCRYPTION_KEY: ${{ secrets.DATABASE_DEFAULT_ENCRYPTION_KEY }}
-      OAUTH_CLIENT_ID_ANDROID: ${{ secrets.OAUTH_CLIENT_ID_ANDROID_STAGING }}
-      APP_METRICA_API_KEY: ${{ secrets.APP_METRICA_API_KEY_STAGING }}
-      FIREBASEAPPDISTRO_APP: ${{ secrets.FIREBASE_APP_ID_ANDROID }}
-      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-      GIT_LAB_ACCESS_TOKEN: ${{ secrets.GIT_LAB_ACCESS_TOKEN }}
-      OAUTH_CLIENT_ID_IOS: ${{ secrets.OAUTH_CLIENT_ID_IOS_STAGING }}
-      AMPLITUDE_API_KEY: ${{ secrets.AMPLITUDE_API_KEY_STAGING }}
-      REVENUECAT_API_KEY: ${{ secrets.REVENUECAT_API_KEY }}
-
+  android-build:
+    name: Android Build
+    runs-on: ubuntu-latest # using ubuntu latest version / or you can use a specific version
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
-
-
-      # Fix "Installed Build Tools revision 31.0.0 is corrupted. Remove and install again using the SDK Manager."
-      # See: https://stackoverflow.com/questions/68387270/android-studio-error-installed-build-tools-revision-31-0-0-is-corrupted
-      - run: cd /usr/local/lib/android/sdk/build-tools/31.0.0 && mv d8 dx  && cd lib && mv d8.jar dx.jar
-      - run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;21.1.6352462" --channel=0
-      
-      # Fix mmkv module build (need to be instaled only one ndk version)
-      # Error: "No toolchains found in the NDK toolchains folder for ABI with prefix: arm-linux-androideabi"
-      - run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --uninstall "ndk;21.4.7075529"
-      - run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --uninstall "ndk;22.1.7171670"
-      - run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --uninstall "ndk;23.1.7779620"
-      - run: ls -la /usr/local/lib/android/sdk/ndk
-
-      - name: Check all required variables
-        run: sh ./scripts/common-check.sh && sh ./scripts/android-dev-check.sh
-
-      - name: Fix error 'ENOSPC - System limit for number of file watchers reached'
-        run: echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p
-
-      - name: Configure git users
-        run: |
-          git config --global user.name "$USER_NAME"
-          git config --global user.email "$USER_EMAIL"
-
-      # - name: Setup SSH keys and known_hosts
-      #   run: |
-      #     mkdir -p ~/.ssh
-      #     echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-      #     chmod 600 ~/.ssh/id_rsa
-      #     ssh-keyscan $SSH_KNOWN_HOST >> ~/.ssh/known_hosts
-      #     ssh-agent -a $SSH_AUTH_SOCK > /dev/null
-      #     ssh-add ~/.ssh/id_rsa
-
       - name: Get repository
         run: |
           rm -rf ./.git ./.github ./.gitignore ./*
@@ -77,73 +20,70 @@ jobs:
           git clone "$REPO_URL" --branch="$CURRENT_BRANCH" --single --depth=1 ./
           git log -1
 
-      # - name: Notify gitlab
-      #   run: sudo chmod +rx "./infrastructure/gitlab/status.sh state=running&description=$GITHUB_RUN_ID"
+      - name: Check out Git repository # clone the repo to local ci workspace
+        uses: actions/checkout@v3
 
-      - name: Notify gitlab 2
-        run: sudo chmod +rx "./infrastructure/gitlab/status.sh" "state=running&description=$GITHUB_RUN_ID"
-
-      - name: Decrypt keystore and Google Credentials
-        run: |
-          gpg --quiet --batch --yes --decrypt --passphrase="$ENCRYPT_PASSWORD" \
-          --output ./android/keystores/release.keystore ./android/keystores/release.keystore.gpg
-          gpg --quiet --batch --yes --decrypt --passphrase="$ENCRYPT_PASSWORD" \
-          --output ./android/keystores/google-private-key.json ./android/keystores/google-private-key.json.gpg
-
-      - name: Install Firebase
-        run: |
-          sudo curl -o "/usr/local/bin/firebase" -L --progress-bar "https://firebase.tools/bin/linux/latest"
-          sudo chmod +rx "/usr/local/bin/firebase"
-
-      - uses: actions/cache@master
-        id: yarn_cache
+      - name: Set up our JDK environment # setup JDK environment: mandatory as we need to build  android project
+        uses: actions/setup-java@v1.4.3
         with:
-          path: node_modules
+          java-version: 11
+
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "::set-output name=dir::$(yarn cache dir)"
+
+      - name: Restore node_modules from cache
+        uses: actions/cache@v3
+        id: yarn-cache
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+      - name: Install dependencies # install project deps with --frozen-lockfile to make sure we will have the same packages version ( very recommended  on running yarn install on ci)
+        run: yarn install --frozen-lockfile
 
-      - run: yarn install --frozen-lockfile
-        if: steps.yarn_cache.outputs.cache-hit != 'true'
-
-      - name: Install Ruby 2.x
-        uses: actions/setup-ruby@v1
+      ## configure cash for gradle : will help to reduce build time
+      - name: Cache Gradle Wrapper
+        uses: actions/cache@v3
         with:
-          ruby-version: "2.x"
+          path: ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
 
-#       - uses: actions/cache@master
-#         id: ruby_cache
-#         with:
-#           path: vendor/bundle
-#           key: ${{ runner.os }}-gems-${{ hashFiles('**/Gemfile.lock') }}
+      - name: Cache Gradle Dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-caches-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-caches-
+      - name: Make Gradlew Executable
+        run: cd android && chmod +x ./gradlew
 
-      - run: |
-          bundle config path vendor/bundle
-          bundle install --jobs 4 --retry 3
-        if: steps.ruby_cache.outputs.cache-hit != 'true'
+      - name: Inject slug/short variables
+        uses: rlespinasse/github-slug-action@v3.x
 
-      # Gradle Cache https://github.com/actions/cache/blob/main/examples.md#java---gradle
-#       - uses: actions/cache@master
-#         with:
-#           path: |
-#             ~/.gradle/caches
-#             ~/.gradle/wrapper
-#           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-#           restore-keys: |
-#             ${{ runner.os }}-gradle-
+      - name: Define vars
+        id: vars # Needed to reuse at 'with: steps.vars.outputs'
+        shell: bash
+        run: |
+          # set tag version
+          echo ::set-output name=tag::${GITHUB_REF_SLUG}
+      - name: Generate App APK
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          REACT_NATIVE_ENV: develop
+          APP_VERSION: ${{ steps.vars.outputs.tag }}
+        id: generate_apk
+        run: |
+          echo ${{ secrets.ANDROID_SIGNING_KEY }} | base64 --decode > android/app/my-upload-key.keystore
+          cd android && ./gradlew assembleRelease --no-daemon
 
-      # To fix mmkv module build error: "CMake 3.9.0 or higher is required.  You are running version 3.6.0-rc2"
-      - name: Specify cmake version
-        run: echo "cmake.dir=/usr/local/lib/android/sdk/cmake/3.10.2.4988404" >> android/local.properties
-
-      - name: Run fastlane line "fastlane android distribute" with PROD ENV variables
-        run: bundle exec fastlane android distribute
-
-      # - name: The job has cancelled
-      #   if: ${{ cancelled() }}
-      #   run: ./infrastructure/gitlab/status.sh "state=canceled"
-
-      # - name: The job has failed
-      #   if: ${{ failure() }}
-      #   run: ./infrastructure/gitlab/status.sh "state=failed"
-
-      # - name: The job has success
-      #   run: ./infrastructure/gitlab/status.sh "state=success"
+      ## Distribute app to Firebase App Distribution for testing / use google play internal track if you have a google play account
+      - name: upload artifact to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{secrets.ANDROID_FIREBASE_APP_ID}}
+          token: ${{secrets.ANDROID_FIREBASE_TOKEN}}
+          groups: testers
+          file: android/app/build/outputs/apk/release/app-armeabi-v7a-release.apk
